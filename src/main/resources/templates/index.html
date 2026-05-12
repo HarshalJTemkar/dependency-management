@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Dependency Management AI Agent System</title>
+    <link rel="stylesheet" th:href="@{/css/report.css}"/>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f6fb; margin: 0; padding: 0; }
+        .header { background: linear-gradient(135deg,#1a237e,#283593); color:#fff; padding:2rem; }
+        .header h1 { margin:0; font-size:1.8rem; }
+        .form-card { background:#fff; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.1); padding:2rem; max-width:700px; margin:2rem auto; }
+        .form-group { margin-bottom:1.2rem; }
+        label { font-weight:600; display:block; margin-bottom:.4rem; color:#333; }
+        input, select { width:100%; padding:.7rem 1rem; border:1.5px solid #cdd; border-radius:8px; font-size:.95rem; box-sizing:border-box; }
+        .btn { background:#1565c0; color:#fff; border:none; padding:.8rem 2rem; border-radius:8px; font-size:1rem; cursor:pointer; width:100%; margin-top:1rem; }
+        .btn:hover { background:#0d47a1; }
+        .source-section { display:none; }
+        .source-section.active { display:block; }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>🔍 Dependency Management AI Agent System</h1>
+    <p>Analyse your Maven project dependencies with AI-powered breaking change detection</p>
+</div>
+<div class="form-card">
+    <h2>Start Analysis</h2>
+    <form th:action="@{/analyze}" method="post" th:object="${request}">
+        <div class="form-group">
+            <label for="sourceType">Source Type</label>
+            <select id="sourceType" name="sourceType" onchange="toggleSource(this.value)">
+                <option value="GITHUB_PUBLIC">GitHub Public Repository</option>
+                <option value="GITHUB_PRIVATE">GitHub Private Repository</option>
+                <option value="LOCAL">Local File System</option>
+            </select>
+        </div>
+
+        <div id="github-section" class="source-section active">
+            <div class="form-group">
+                <label for="repoUrl">GitHub Repository URL</label>
+                <input type="text" id="repoUrl" name="repoUrl"
+                       placeholder="https://github.com/owner/repo"/>
+            </div>
+        </div>
+
+        <div id="token-section" class="source-section">
+            <div class="form-group">
+                <label for="githubToken">GitHub Personal Access Token (PAT)</label>
+                <input type="password" id="githubToken" name="githubToken"
+                       placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"/>
+            </div>
+        </div>
+
+        <div id="local-section" class="source-section">
+            <div class="form-group">
+                <label for="localPath">Local Project Path</label>
+                <input type="text" id="localPath" name="localPath"
+                       placeholder="/home/user/my-project"/>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="language">Report Language</label>
+            <select id="language" name="language">
+                <option value="en">English</option>
+                <option value="de">Deutsch</option>
+            </select>
+        </div>
+
+        <input type="hidden" name="correlationId" th:value="${#strings.randomAlphanumeric(32)}"/>
+        <button type="submit" class="btn">🚀 Analyse Dependencies</button>
+    </form>
+</div>
+<script>
+    function toggleSource(type) {
+        document.getElementById('github-section').className = 'source-section' + (type !== 'LOCAL' ? ' active' : '');
+        document.getElementById('token-section').className = 'source-section' + (type === 'GITHUB_PRIVATE' ? ' active' : '');
+        document.getElementById('local-section').className = 'source-section' + (type === 'LOCAL' ? ' active' : '');
+    }
+</script>
+</body>
+</html>
