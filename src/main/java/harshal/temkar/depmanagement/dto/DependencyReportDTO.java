@@ -20,6 +20,8 @@ import java.util.List;
  * @param lowCount          number of LOW severity findings
  * @param hasPartialResults {@code true} if any agent used fallback strategy
  * @param dependencies      ordered list of per-dependency analysis results
+ * @param notFoundDependencies dependencies that could not be resolved on Maven Central
+ *                             (e.g. private artifacts, unpublished modules, typos)
  * @param severityChartData ECharts data for severity pie chart
  * @param statusChartData   ECharts data for up-to-date vs outdated chart
  * @param updatesChartData  ECharts data for updates-by-severity bar chart
@@ -38,6 +40,7 @@ public record DependencyReportDTO(
     int lowCount,
     boolean hasPartialResults,
     List<AnalysisResult> dependencies,
+    List<AnalysisResult> notFoundDependencies,
     ChartDataDTO severityChartData,
     ChartDataDTO statusChartData,
     ChartDataDTO updatesChartData

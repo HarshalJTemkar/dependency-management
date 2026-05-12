@@ -55,30 +55,37 @@ public class VersionCheckerAgent {
                 MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_VERSION,
                 maxPasses, dependencies.size());
 
+        final long startNs = System.nanoTime();
         List<VersionCheckResult> results = List.of();
 
-        for (int pass = 1; pass <= maxPasses; pass++) {
-            MDC.put(Constants.MDC_ITERATION_PASS, String.valueOf(pass));
-            log.debug("[correlationId={}][agent={}][pass={}] Version check pass",
-                    MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_VERSION, pass);
-
-            results = mavenCentralService.checkVersions(dependencies);
-
-            final long unknownCount = results.stream()
-                    .filter(r -> "UNKNOWN".equals(r.latestVersion())).count();
-
-            log.info("[correlationId={}][agent={}][pass={}] Checked {} deps, {} UNKNOWN",
-                    MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_VERSION,
-                    pass, results.size(), unknownCount);
-
-            if (unknownCount == 0) {
-                log.info("[correlationId={}][agent={}][pass={}] Version check COMPLETE — all resolved",
+        try {
+            for (int pass = 1; pass <= maxPasses; pass++) {
+                MDC.put(Constants.MDC_ITERATION_PASS, String.valueOf(pass));
+                log.debug("[correlationId={}][agent={}][pass={}] Version check pass",
                         MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_VERSION, pass);
-                break;
+
+                results = mavenCentralService.checkVersions(dependencies);
+
+                final long unknownCount = results.stream()
+                        .filter(r -> "UNKNOWN".equals(r.latestVersion())).count();
+
+                log.info("[correlationId={}][agent={}][pass={}] Checked {} deps, {} UNKNOWN",
+                        MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_VERSION,
+                        pass, results.size(), unknownCount);
+
+                if (unknownCount == 0) {
+                    log.info("[correlationId={}][agent={}][pass={}] Version check COMPLETE — all resolved",
+                            MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_VERSION, pass);
+                    break;
+                }
             }
+        } finally {
+            final long elapsedMs = (System.nanoTime() - startNs) / 1_000_000;
+            log.info("[correlationId={}][agent={}] COMPLETED — totalConsumed={}ms, results={}",
+                    MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_VERSION, elapsedMs, results.size());
+            MDC.remove(Constants.MDC_ITERATION_PASS);
         }
 
-        MDC.remove(Constants.MDC_ITERATION_PASS);
         return results;
     }
 }
