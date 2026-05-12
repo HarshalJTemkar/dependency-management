@@ -38,11 +38,12 @@ public class GitHubTool {
      * @param ref   branch, tag or commit SHA (default: main)
      * @return raw pom.xml content as a string
      */
-    @Tool(description = "Fetch pom.xml content from a public GitHub repository. Params: owner, repo, ref (branch/tag).")
+    @Tool(description = "Fetch pom.xml content from a public GitHub repository. Params: owner, repo, ref (branch/tag, optional - uses default branch when blank).")
     public String fetchPublicPomXml(final String owner, final String repo, final String ref) {
-        final String path = "/repos/" + owner + "/" + repo + "/contents/pom.xml?ref=" + ref;
-        log.debug("[correlationId={}][agent={}] Fetching public pom.xml: {}/{}",
-            MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_SOURCE_READER, owner, repo);
+        final String path = buildContentsPath(owner, repo, ref);
+        log.debug("[correlationId={}][agent={}] Fetching public pom.xml: {}/{} ref={}",
+            MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_SOURCE_READER, owner, repo,
+            (ref == null || ref.isBlank()) ? "<default>" : ref);
         return githubWebClient.get().uri(path)
             .header(Constants.ACCEPT_HEADER, Constants.GITHUB_RAW_CONTENT_TYPE)
             .header(Constants.GITHUB_API_VERSION_HEADER, Constants.GITHUB_API_VERSION)
@@ -69,9 +70,10 @@ public class GitHubTool {
      */
     @Tool(description = "Fetch pom.xml content from a private GitHub repository using a PAT token.")
     public String fetchPrivatePomXml(final String owner, final String repo, final String ref, final String token) {
-        final String path = "/repos/" + owner + "/" + repo + "/contents/pom.xml?ref=" + ref;
-        log.debug("[correlationId={}][agent={}] Fetching private pom.xml: {}/{}",
-            MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_SOURCE_READER, owner, repo);
+        final String path = buildContentsPath(owner, repo, ref);
+        log.debug("[correlationId={}][agent={}] Fetching private pom.xml: {}/{} ref={}",
+            MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_SOURCE_READER, owner, repo,
+            (ref == null || ref.isBlank()) ? "<default>" : ref);
         return githubWebClient.get().uri(path)
             .header(Constants.AUTHORIZATION_HEADER, Constants.BEARER_PREFIX + token)
             .header(Constants.ACCEPT_HEADER, Constants.GITHUB_RAW_CONTENT_TYPE)
@@ -88,15 +90,45 @@ public class GitHubTool {
             .blockOptional()
             .orElseThrow(() -> new SourceReadException(ErrorCode.POM_XML_NOT_FOUND, "Empty response from GitHub"));
     }
+
+    /**
+     * Builds the GitHub contents API path. When {@code ref} is null/blank,
+     * the {@code ?ref=} parameter is omitted so GitHub uses the repository's
+     * default branch automatically (no need to guess main vs master).
+     */
+    private String buildContentsPath(final String owner, final String repo, final String ref) {
+        final String base = "/repos/" + owner + "/" + repo + "/contents/pom.xml";
+        return (ref == null || ref.isBlank()) ? base : base + "?ref=" + ref;
+    }
+
     /**
      * Parses a GitHub URL into owner/repo components.
+     * Tolerant of trailing {@code .git}, trailing slashes, query strings,
+     * fragments and {@code tree/<branch>} sub-paths.
+     *
      * @param githubUrl full GitHub URL e.g. https://github.com/owner/repo
      * @return Map with keys: owner, repo
      */
     @Tool(description = "Parse a GitHub URL into owner and repo name components.")
     public Map<String, String> parseGithubUrl(final String githubUrl) {
-        final String[] parts = githubUrl.replaceAll("https?://github.com/", "").split("/");
-        if (parts.length < 2) {
+        if (githubUrl == null || githubUrl.isBlank()) {
+            throw new SourceReadException(ErrorCode.INVALID_INPUT, "GitHub URL is empty");
+        }
+        String cleaned = githubUrl.trim();
+        // Strip query/fragment
+        final int q = cleaned.indexOf('?');
+        if (q > 0) cleaned = cleaned.substring(0, q);
+        final int h = cleaned.indexOf('#');
+        if (h > 0) cleaned = cleaned.substring(0, h);
+        // Strip protocol + host
+        cleaned = cleaned.replaceAll("^(https?://)?(www\\.)?github\\.com/", "");
+        // Strip git@github.com: SSH form
+        cleaned = cleaned.replaceAll("^git@github\\.com:", "");
+        // Strip trailing .git, trailing slash
+        if (cleaned.endsWith(".git")) cleaned = cleaned.substring(0, cleaned.length() - 4);
+        if (cleaned.endsWith("/")) cleaned = cleaned.substring(0, cleaned.length() - 1);
+        final String[] parts = cleaned.split("/");
+        if (parts.length < 2 || parts[0].isBlank() || parts[1].isBlank()) {
             throw new SourceReadException(ErrorCode.INVALID_INPUT, "Invalid GitHub URL: " + githubUrl);
         }
         return Map.of("owner", parts[0], "repo", parts[1]);

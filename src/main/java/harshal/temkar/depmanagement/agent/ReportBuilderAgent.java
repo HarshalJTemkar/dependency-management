@@ -47,24 +47,31 @@ public class ReportBuilderAgent {
         log.info("[correlationId={}][agent={}] Building report (maxPasses={}, deps={})",
                 correlationId, Constants.AGENT_REPORT, maxPasses, results.size());
 
+        final long startNs = System.nanoTime();
         DependencyReportDTO report = null;
-        for (int pass = 1; pass <= maxPasses; pass++) {
-            MDC.put(Constants.MDC_ITERATION_PASS, String.valueOf(pass));
-            log.debug("[correlationId={}][agent={}][pass={}] Assembling report",
-                    correlationId, Constants.AGENT_REPORT, pass);
-
-            report = assemble(correlationId, sourceInfo, results, hasPartialResults);
-
-            if (isConsistent(report)) {
-                log.info("[correlationId={}][agent={}][pass={}] Report COMPLETE — counts consistent",
+        try {
+            for (int pass = 1; pass <= maxPasses; pass++) {
+                MDC.put(Constants.MDC_ITERATION_PASS, String.valueOf(pass));
+                log.debug("[correlationId={}][agent={}][pass={}] Assembling report",
                         correlationId, Constants.AGENT_REPORT, pass);
-                break;
+
+                report = assemble(correlationId, sourceInfo, results, hasPartialResults);
+
+                if (isConsistent(report)) {
+                    log.info("[correlationId={}][agent={}][pass={}] Report COMPLETE — counts consistent",
+                            correlationId, Constants.AGENT_REPORT, pass);
+                    break;
+                }
+                log.warn("[correlationId={}][agent={}][pass={}] Report inconsistency detected, recomputing",
+                        correlationId, Constants.AGENT_REPORT, pass);
             }
-            log.warn("[correlationId={}][agent={}][pass={}] Report inconsistency detected, recomputing",
-                    correlationId, Constants.AGENT_REPORT, pass);
+        } finally {
+            final long elapsedMs = (System.nanoTime() - startNs) / 1_000_000;
+            log.info("[correlationId={}][agent={}] COMPLETED — totalConsumed={}ms",
+                    correlationId, Constants.AGENT_REPORT, elapsedMs);
+            MDC.remove(Constants.MDC_ITERATION_PASS);
         }
 
-        MDC.remove(Constants.MDC_ITERATION_PASS);
         return report;
     }
 
@@ -81,14 +88,25 @@ public class ReportBuilderAgent {
                                           final String sourceInfo,
                                           final List<AnalysisResult> results,
                                           final boolean hasPartialResults) {
+        // Split into found vs not-found (latestVersion == UNKNOWN means Maven Central
+        // could not resolve this artifact — typically private/internal deps).
+        final List<AnalysisResult> notFound = results.stream()
+                .filter(r -> r.versionCheckResult() != null
+                        && "UNKNOWN".equalsIgnoreCase(r.versionCheckResult().latestVersion()))
+                .toList();
+        final List<AnalysisResult> found = results.stream()
+                .filter(r -> !(r.versionCheckResult() != null
+                        && "UNKNOWN".equalsIgnoreCase(r.versionCheckResult().latestVersion())))
+                .toList();
+
         final int total = results.size();
-        final int upToDate = (int) results.stream()
+        final int upToDate = (int) found.stream()
                 .filter(r -> r.severity() == Severity.UP_TO_DATE).count();
-        final int outdated = total - upToDate;
-        final int critical = count(results, Severity.CRITICAL);
-        final int high = count(results, Severity.HIGH);
-        final int medium = count(results, Severity.MEDIUM);
-        final int low = count(results, Severity.LOW);
+        final int outdated = total - upToDate - notFound.size();
+        final int critical = count(found, Severity.CRITICAL);
+        final int high = count(found, Severity.HIGH);
+        final int medium = count(found, Severity.MEDIUM);
+        final int low = count(found, Severity.LOW);
 
         return new DependencyReportDTO(
                 correlationId,
@@ -101,8 +119,9 @@ public class ReportBuilderAgent {
                 high,
                 medium,
                 low,
-                hasPartialResults,
-                results,
+                hasPartialResults || !notFound.isEmpty(),
+                found,
+                notFound,
                 severityChart(critical, high, medium, low),
                 statusChart(upToDate, outdated),
                 updatesChart(critical, high, medium, low)
@@ -117,7 +136,8 @@ public class ReportBuilderAgent {
      */
     private boolean isConsistent(final DependencyReportDTO report) {
         final int sumSeverity = report.criticalCount() + report.highCount()
-                + report.mediumCount() + report.lowCount() + report.upToDate();
+                + report.mediumCount() + report.lowCount() + report.upToDate()
+                + (report.notFoundDependencies() == null ? 0 : report.notFoundDependencies().size());
         final boolean countsOk = sumSeverity == report.totalDependencies();
         final boolean chartOk = !report.severityChartData().isEmpty();
         return countsOk && chartOk;

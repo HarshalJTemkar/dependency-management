@@ -46,32 +46,33 @@ app:
 
   maven:
     central-search-url: https://search.maven.org/solrsearch/select
-    timeout-seconds: 15
+    timeout-seconds: 8
 
   ai:
     primary-provider: ollama
     fallback-provider: openai
-    max-retries: 3
-    timeout-seconds: 60
+    max-retries: 2
+    timeout-seconds: 30
     iterations:
       parser:
-        max-passes: 3
+        max-passes: 2
         confidence-threshold: HIGH
       version-checker:
-        max-passes: 2
+        max-passes: 1
         exclude-prerelease: true
         exclude-snapshot: true
       analysis:
-        max-passes: 4
-        batch-size: 10
+        max-passes: 2
+        batch-size: 3
+        max-parallelism: 16
         deep-analysis-severities:
           - CRITICAL
           - HIGH
-        json-repair-max-attempts: 2
+        json-repair-max-attempts: 1
       report-builder:
-        max-passes: 2
+        max-passes: 1
       orchestrator:
-        max-retries: 3
+        max-retries: 2
         backoff-initial-seconds: 1
         backoff-multiplier: 2
 

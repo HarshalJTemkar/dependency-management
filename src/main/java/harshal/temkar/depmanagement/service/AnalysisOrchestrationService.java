@@ -167,14 +167,25 @@ public class AnalysisOrchestrationService {
                                              final String sourceInfo,
                                              final List<AnalysisResult> results,
                                              final boolean hasPartialResults) {
-        final int total = results.size();
-        final long upToDate = results.stream()
+        // Partition results: dependencies not resolvable on Maven Central
+        // are flagged via a sentinel "UNKNOWN" latestVersion from MavenCentralService.
+        final List<AnalysisResult> notFoundDependencies = results.stream()
+                .filter(r -> r.versionCheckResult() != null
+                        && "UNKNOWN".equals(r.versionCheckResult().latestVersion()))
+                .toList();
+        final List<AnalysisResult> foundDependencies = results.stream()
+                .filter(r -> r.versionCheckResult() == null
+                        || !"UNKNOWN".equals(r.versionCheckResult().latestVersion()))
+                .toList();
+
+        final int total = foundDependencies.size();
+        final long upToDate = foundDependencies.stream()
                 .filter(r -> !r.versionCheckResult().updateAvailable()).count();
         final long outdated = total - upToDate;
-        final long critical = count(results, harshal.temkar.depmanagement.domain.enums.Severity.CRITICAL);
-        final long high = count(results, harshal.temkar.depmanagement.domain.enums.Severity.HIGH);
-        final long medium = count(results, harshal.temkar.depmanagement.domain.enums.Severity.MEDIUM);
-        final long low = count(results, harshal.temkar.depmanagement.domain.enums.Severity.LOW);
+        final long critical = count(foundDependencies, harshal.temkar.depmanagement.domain.enums.Severity.CRITICAL);
+        final long high = count(foundDependencies, harshal.temkar.depmanagement.domain.enums.Severity.HIGH);
+        final long medium = count(foundDependencies, harshal.temkar.depmanagement.domain.enums.Severity.MEDIUM);
+        final long low = count(foundDependencies, harshal.temkar.depmanagement.domain.enums.Severity.LOW);
 
         final harshal.temkar.depmanagement.dto.ChartDataDTO severityChart =
                 buildSeverityChart(critical, high, medium, low);
@@ -194,8 +205,9 @@ public class AnalysisOrchestrationService {
                 (int) high,
                 (int) medium,
                 (int) low,
-                hasPartialResults,
-                results,
+                hasPartialResults || !notFoundDependencies.isEmpty(),
+                foundDependencies,
+                notFoundDependencies,
                 severityChart,
                 statusChart,
                 updatesChart

@@ -89,6 +89,7 @@ public class OrchestratorAgent {
         log.info("[correlationId={}][agent={}] Pipeline START — sourceType={}",
                 correlationId, Constants.AGENT_ORCHESTRATOR, request.sourceType());
 
+        final long pipelineStartNs = System.nanoTime();
         boolean hasPartialResults = false;
         final String sourceInfo = resolveSourceInfo(request);
 
@@ -156,8 +157,9 @@ public class OrchestratorAgent {
                 () -> reportBuilderAgent.buildReport(
                         correlationId, sourceInfo, finalAnalysisResults, finalPartial));
 
-        log.info("[correlationId={}][agent={}] Pipeline COMPLETE — {} deps, partialResults={}",
-                correlationId, Constants.AGENT_ORCHESTRATOR, report.totalDependencies(), finalPartial);
+        log.info("[correlationId={}][agent={}] Pipeline COMPLETE — {} deps, partialResults={}, totalConsumed={}ms",
+                correlationId, Constants.AGENT_ORCHESTRATOR, report.totalDependencies(), finalPartial,
+                (System.nanoTime() - pipelineStartNs) / 1_000_000);
         MDC.clear();
         return report;
     }
@@ -182,15 +184,18 @@ public class OrchestratorAgent {
             MDC.put(Constants.MDC_AGENT_NAME, agentName);
             log.debug("[correlationId={}][agent={}] Attempt {}/{}",
                     correlationId, agentName, attempt, maxRetries);
+            final long attemptStartNs = System.nanoTime();
             try {
                 final T result = action.get();
-                log.info("[correlationId={}][agent={}] Succeeded on attempt {}",
-                        correlationId, agentName, attempt);
+                final long attemptMs = (System.nanoTime() - attemptStartNs) / 1_000_000;
+                log.info("[correlationId={}][agent={}] Succeeded on attempt {} — attemptConsumed={}ms",
+                        correlationId, agentName, attempt, attemptMs);
                 return result;
             } catch (final Exception ex) {
+                final long attemptMs = (System.nanoTime() - attemptStartNs) / 1_000_000;
                 lastException = ex;
-                log.warn("[correlationId={}][agent={}] Attempt {} failed: {}",
-                        correlationId, agentName, attempt, ex.getMessage());
+                log.warn("[correlationId={}][agent={}] Attempt {} failed after {}ms: {}",
+                        correlationId, agentName, attempt, attemptMs, ex.getMessage());
                 if (attempt < maxRetries) {
                     sleep(backoff);
                     backoff *= backoffMultiplier;

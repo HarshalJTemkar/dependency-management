@@ -63,21 +63,30 @@ public class SourceReaderAgent {
         log.info("[correlationId={}][agent={}] Reading pom.xml — sourceType={}",
                 MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_SOURCE_READER, sourceType);
 
-        return switch (sourceType) {
-            case GITHUB_PUBLIC -> {
-                final Map<String, String> parts = gitHubTool.parseGithubUrl(repoUrl);
-                yield gitHubTool.fetchPublicPomXml(parts.get("owner"), parts.get("repo"), "main");
-            }
-            case GITHUB_PRIVATE -> {
-                if (githubToken == null || githubToken.isBlank()) {
-                    throw new SourceReadException(ErrorCode.GITHUB_AUTH_FAILED,
-                            "GitHub PAT token required for private repositories");
+        final long startNs = System.nanoTime();
+        try {
+            return switch (sourceType) {
+                case GITHUB_PUBLIC -> {
+                    final Map<String, String> parts = gitHubTool.parseGithubUrl(repoUrl);
+                    // Pass empty ref so GitHub uses the repo's default branch
+                    // (works for repos with master, develop, or any other default branch).
+                    yield gitHubTool.fetchPublicPomXml(parts.get("owner"), parts.get("repo"), "");
                 }
-                final Map<String, String> parts = gitHubTool.parseGithubUrl(repoUrl);
-                yield gitHubTool.fetchPrivatePomXml(parts.get("owner"), parts.get("repo"),
-                        "main", githubToken);
-            }
-            case LOCAL -> localFileSystemTool.readLocalPomXml(localPath);
-        };
+                case GITHUB_PRIVATE -> {
+                    if (githubToken == null || githubToken.isBlank()) {
+                        throw new SourceReadException(ErrorCode.GITHUB_AUTH_FAILED,
+                                "GitHub PAT token required for private repositories");
+                    }
+                    final Map<String, String> parts = gitHubTool.parseGithubUrl(repoUrl);
+                    yield gitHubTool.fetchPrivatePomXml(parts.get("owner"), parts.get("repo"),
+                            "", githubToken);
+                }
+                case LOCAL -> localFileSystemTool.readLocalPomXml(localPath);
+            };
+        } finally {
+            final long elapsedMs = (System.nanoTime() - startNs) / 1_000_000;
+            log.info("[correlationId={}][agent={}] COMPLETED — totalConsumed={}ms",
+                    MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_SOURCE_READER, elapsedMs);
+        }
     }
 }

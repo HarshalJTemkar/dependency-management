@@ -56,34 +56,41 @@ public class DependencyParserAgent {
         log.info("[correlationId={}][agent={}] Starting dependency parse loop (maxPasses={})",
                 MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_PARSER, maxPasses);
 
+        final long startNs = System.nanoTime();
         List<DependencyInfo> result = new ArrayList<>();
         int previousCount = -1;
 
-        for (int pass = 1; pass <= maxPasses; pass++) {
-            MDC.put(Constants.MDC_ITERATION_PASS, String.valueOf(pass));
-            log.debug("[correlationId={}][agent={}][pass={}] Reflection loop — parsing",
-                    MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_PARSER, pass);
+        try {
+            for (int pass = 1; pass <= maxPasses; pass++) {
+                MDC.put(Constants.MDC_ITERATION_PASS, String.valueOf(pass));
+                log.debug("[correlationId={}][agent={}][pass={}] Reflection loop — parsing",
+                        MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_PARSER, pass);
 
-            try {
-                result = mavenPomParser.parse(pomXml);
-                log.info("[correlationId={}][agent={}][pass={}] Parsed {} dependencies",
-                        MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_PARSER, pass, result.size());
-
-                if (result.size() == previousCount) {
-                    log.info("[correlationId={}][agent={}][pass={}] Parse COMPLETE — count stable at {}",
+                try {
+                    result = mavenPomParser.parse(pomXml);
+                    log.info("[correlationId={}][agent={}][pass={}] Parsed {} dependencies",
                             MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_PARSER, pass, result.size());
-                    break;
-                }
-                previousCount = result.size();
 
-            } catch (final ParseException ex) {
-                log.error("[correlationId={}][agent={}][pass={}] Parse failed: {}",
-                        MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_PARSER, pass, ex.getMessage());
-                if (pass == maxPasses) throw ex;
+                    if (result.size() == previousCount) {
+                        log.info("[correlationId={}][agent={}][pass={}] Parse COMPLETE — count stable at {}",
+                                MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_PARSER, pass, result.size());
+                        break;
+                    }
+                    previousCount = result.size();
+
+                } catch (final ParseException ex) {
+                    log.error("[correlationId={}][agent={}][pass={}] Parse failed: {}",
+                            MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_PARSER, pass, ex.getMessage());
+                    if (pass == maxPasses) throw ex;
+                }
             }
+        } finally {
+            final long elapsedMs = (System.nanoTime() - startNs) / 1_000_000;
+            log.info("[correlationId={}][agent={}] COMPLETED — totalConsumed={}ms, dependencies={}",
+                    MDC.get(Constants.MDC_CORRELATION_ID), Constants.AGENT_PARSER, elapsedMs, result.size());
+            MDC.remove(Constants.MDC_ITERATION_PASS);
         }
 
-        MDC.remove(Constants.MDC_ITERATION_PASS);
         return result;
     }
 }

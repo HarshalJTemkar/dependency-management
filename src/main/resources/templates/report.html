@@ -69,6 +69,46 @@
         </div>
     </section>
 
+    <!-- ═══════════════════════════ NOT FOUND DEPENDENCIES ═══════════════════════════ -->
+    <section class="not-found-section"
+             th:if="${report.notFoundDependencies != null and !report.notFoundDependencies.isEmpty()}">
+        <div class="not-found-header">
+            <h2>
+                <span class="nf-icon">⚠</span>
+                <span th:text="#{report.notfound.title}">Dependencies Not Found on Maven Central</span>
+                <span class="nf-count" th:text="${report.notFoundDependencies.size()}">0</span>
+            </h2>
+            <p class="nf-subtitle" th:text="#{report.notfound.subtitle}">
+                These artifacts could not be resolved on Maven Central. They may be private,
+                internal, or hosted on another repository.
+            </p>
+        </div>
+        <div class="table-section nf-table-section">
+            <table>
+                <thead>
+                <tr>
+                    <th th:text="#{report.table.groupid}">Group ID</th>
+                    <th th:text="#{report.table.artifactid}">Artifact ID</th>
+                    <th th:text="#{report.table.current}">Current</th>
+                    <th th:text="#{report.table.source}">Source</th>
+                    <th th:text="#{report.notfound.reason}">Reason</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="dep : ${report.notFoundDependencies}">
+                    <td th:text="${dep.versionCheckResult.dependency.groupId}"></td>
+                    <td th:text="${dep.versionCheckResult.dependency.artifactId}"></td>
+                    <td th:text="${dep.versionCheckResult.dependency.currentVersion}"></td>
+                    <td th:text="${dep.versionCheckResult.dependency.resolvedFrom}"></td>
+                    <td>
+                        <span class="badge badge-notfound" th:text="#{report.notfound.badge}">NOT FOUND</span>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
     <!-- ═══════════════════════════ FILTER / SEARCH ═══════════════════════════ -->
     <section class="table-controls">
         <input type="text" id="searchInput" placeholder="Search dependencies…" oninput="filterTable()"/>
