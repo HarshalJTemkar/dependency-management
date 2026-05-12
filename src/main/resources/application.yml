@@ -1,0 +1,91 @@
+spring:
+  application:
+    name: dependency-management
+
+  ai:
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        model: qwen3.5:0.8b
+        options:
+          temperature: 0.1
+          num-predict: 2048
+    openai:
+      api-key: ${OPENAI_API_KEY:openai_api_key_not_set}
+      chat:
+        model: gpt-4o-mini
+        options:
+          temperature: 0.1
+
+  thymeleaf:
+    cache: false
+    encoding: UTF-8
+    mode: HTML
+
+  web:
+    resources:
+      cache:
+        period: 0
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+app:
+  github:
+    api-base-url: https://api.github.com
+    token: ${GITHUB_TOKEN:github_token_not_set}
+    timeout-seconds: 30
+
+  maven:
+    central-search-url: https://search.maven.org/solrsearch/select
+    timeout-seconds: 15
+
+  ai:
+    primary-provider: ollama
+    fallback-provider: openai
+    max-retries: 3
+    timeout-seconds: 60
+    iterations:
+      parser:
+        max-passes: 3
+        confidence-threshold: HIGH
+      version-checker:
+        max-passes: 2
+        exclude-prerelease: true
+        exclude-snapshot: true
+      analysis:
+        max-passes: 4
+        batch-size: 10
+        deep-analysis-severities:
+          - CRITICAL
+          - HIGH
+        json-repair-max-attempts: 2
+      report-builder:
+        max-passes: 2
+      orchestrator:
+        max-retries: 3
+        backoff-initial-seconds: 1
+        backoff-multiplier: 2
+
+  cache:
+    version-check-ttl-minutes: 60
+    max-size: 1000
+
+  analysis:
+    max-dependencies-per-batch: 20
+    correlation-id-header: X-Correlation-ID
+
+logging:
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%X{correlationId}][%X{agentName}][pass=%X{iterationPass}] %-5level %logger{36} - %msg%n'
+  level:
+    root: INFO
+    '[harshal.temkar.depmanagement]': DEBUG

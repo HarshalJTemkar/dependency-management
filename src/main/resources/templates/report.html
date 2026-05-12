@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title th:text="#{report.title}">Dependency Analysis Report</title>
+    <link rel="stylesheet" th:href="@{/css/report.css}"/>
+    <!-- ECharts via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body>
+
+<!-- ═══════════════════════════ HEADER ═══════════════════════════ -->
+<header class="page-header">
+    <div class="header-inner">
+        <div>
+            <h1 th:text="#{report.title}">Dependency Analysis Report</h1>
+            <div class="header-meta">
+                <span><strong th:text="#{report.subtitle.correlation}">Correlation ID</strong>:
+                    <code th:text="${report.correlationId}"></code></span>
+                <span><strong th:text="#{report.subtitle.generated}">Generated at</strong>:
+                    <span th:text="${#temporals.format(report.generatedAt,'yyyy-MM-dd HH:mm:ss')}"></span></span>
+                <span><strong th:text="#{report.subtitle.source}">Source</strong>:
+                    <span th:text="${report.sourceInfo}"></span></span>
+            </div>
+        </div>
+        <div class="lang-toggle">
+            <a href="?lang=en" class="lang-btn" th:classappend="${lang == 'en'} ? 'active'">EN</a>
+            <a href="?lang=de" class="lang-btn" th:classappend="${lang == 'de'} ? 'active'">DE</a>
+        </div>
+    </div>
+
+    <!-- Warning banner -->
+    <div class="warning-banner" th:if="${report.hasPartialResults}">
+        ⚠️ <span th:text="#{report.warning.partial}">Warning: Some results may be incomplete</span>
+    </div>
+</header>
+
+<!-- ═══════════════════════════ SUMMARY CARDS ═══════════════════════════ -->
+<main class="container">
+    <section class="cards">
+        <div class="card card-total">
+            <div class="card-value" th:text="${report.totalDependencies}">0</div>
+            <div class="card-label" th:text="#{report.card.total}">Total Dependencies</div>
+        </div>
+        <div class="card card-uptodate">
+            <div class="card-value" th:text="${report.upToDate}">0</div>
+            <div class="card-label" th:text="#{report.card.uptodate}">Up to Date</div>
+        </div>
+        <div class="card card-outdated">
+            <div class="card-value" th:text="${report.outdated}">0</div>
+            <div class="card-label" th:text="#{report.card.outdated}">Outdated</div>
+        </div>
+        <div class="card card-critical">
+            <div class="card-value" th:text="${report.criticalCount}">0</div>
+            <div class="card-label" th:text="#{report.card.critical}">Critical</div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════ CHARTS ═══════════════════════════ -->
+    <section class="charts">
+        <div class="chart-box">
+            <h2 th:text="#{report.chart.severity}">Severity Distribution</h2>
+            <div id="severityChart" class="chart-canvas"></div>
+        </div>
+        <div class="chart-box">
+            <h2 th:text="#{report.chart.updates}">Updates by Severity</h2>
+            <div id="updatesChart" class="chart-canvas"></div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════ FILTER / SEARCH ═══════════════════════════ -->
+    <section class="table-controls">
+        <input type="text" id="searchInput" placeholder="Search dependencies…" oninput="filterTable()"/>
+        <select id="severityFilter" onchange="filterTable()">
+            <option value="">All Severities</option>
+            <option value="CRITICAL">CRITICAL</option>
+            <option value="HIGH">HIGH</option>
+            <option value="MEDIUM">MEDIUM</option>
+            <option value="LOW">LOW</option>
+            <option value="UP_TO_DATE">UP TO DATE</option>
+        </select>
+    </section>
+
+    <!-- ═══════════════════════════ DEPENDENCY TABLE ═══════════════════════════ -->
+    <section class="table-section">
+        <table id="depTable">
+            <thead>
+            <tr>
+                <th onclick="sortTable(0)" th:text="#{report.table.groupid}">Group ID</th>
+                <th onclick="sortTable(1)" th:text="#{report.table.artifactid}">Artifact ID</th>
+                <th onclick="sortTable(2)" th:text="#{report.table.current}">Current</th>
+                <th onclick="sortTable(3)" th:text="#{report.table.latest}">Latest</th>
+                <th onclick="sortTable(4)" th:text="#{report.table.severity}">Severity</th>
+                <th th:text="#{report.table.breaking}">Breaking Changes</th>
+                <th th:text="#{report.table.migration}">Migration Notes</th>
+                <th th:text="#{report.table.source}">Source</th>
+                <th>Analysis</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="dep : ${report.dependencies}"
+                th:attr="data-severity=${dep.severity}">
+                <td th:text="${dep.versionCheckResult.dependency.groupId}"></td>
+                <td th:text="${dep.versionCheckResult.dependency.artifactId}"></td>
+                <td th:text="${dep.versionCheckResult.dependency.currentVersion}"></td>
+                <td>
+                    <span th:text="${dep.versionCheckResult.latestVersion}"></span>
+                    <a th:if="${!#strings.isEmpty(dep.releaseNotesUrl)}"
+                       th:href="${dep.releaseNotesUrl}" target="_blank" class="release-link">📋</a>
+                </td>
+                <td>
+                    <span class="badge"
+                          th:classappend="'badge-' + ${dep.severity.name().toLowerCase()}"
+                          th:text="${dep.severity}"></span>
+                </td>
+                <td class="notes-cell" th:text="${dep.breakingChanges}"></td>
+                <td class="notes-cell" th:text="${dep.migrationNotes}"></td>
+                <td th:text="${dep.versionCheckResult.dependency.resolvedFrom}"></td>
+                <td>
+                    <span class="badge"
+                          th:if="${dep.isLlmAnalyzed()}"
+                          th:text="#{report.badge.llm}"
+                          style="background:#7b1fa2;color:#fff">AI</span>
+                    <span class="badge"
+                          th:unless="${dep.isLlmAnalyzed()}"
+                          th:text="#{report.badge.rulebased}"
+                          style="background:#546e7a;color:#fff">Rule</span>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+</main>
+
+<!-- ═══════════════════════════ FOOTER ═══════════════════════════ -->
+<footer class="page-footer">
+    <span th:text="#{report.footer}">Generated by Dependency Management AI Agent System</span>
+</footer>
+
+<!-- ═══════════════════════════ CHART DATA (injected by Thymeleaf) ═══════════════════════════ -->
+<script th:inline="javascript">
+    const severityLabels = /*[[${report.severityChartData.labels}]]*/ [];
+    const severityValues = /*[[${report.severityChartData.values}]]*/ [];
+    const updatesLabels  = /*[[${report.updatesChartData.labels}]]*/ [];
+    const updatesValues  = /*[[${report.updatesChartData.values}]]*/ [];
+</script>
+<script th:src="@{/js/charts.js}"></script>
+</body>
+</html>
